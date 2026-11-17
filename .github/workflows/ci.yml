@@ -93,7 +93,7 @@ jobs:
     needs: [python, node, java, php]     # dépendance : attend les 4 jobs
     steps:
       - name: Build
-        run: echo "Build OK : tous les tests sont passés"
+        run: echo "Build OK - tous les tests sont passés"
 
   # ============================================================
   # JOB 6 : deploy, après build, uniquement sur main
