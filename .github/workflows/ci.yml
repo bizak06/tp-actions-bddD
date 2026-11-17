@@ -1,24 +1,37 @@
+# Nom du workflow, affiché dans l'onglet Actions
 name: CI
 
+# Quand se lance-t-il ? À chaque push et chaque pull request
 on: [push, pull_request]
 
+# Liste des jobs
 jobs:
+
+  # ============================================================
+  # JOB 1 : python, avec une matrice de 2 versions
+  # ============================================================
   python:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest                # machine Ubuntu fournie par GitHub
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]  # 2 valeurs → 2 jobs créés
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4          # 1. télécharger le code du dépôt
       - name: Préparer la base de données
-        run: bash db/setup.sh
-      - uses: actions/setup-python@v5
+        run: bash db/setup.sh              # 2. PostgreSQL + base tp + table students
+      - uses: actions/setup-python@v5      # 3. installer la version de Python courante
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}   # 3.10 puis 3.12
       - name: Installer les dépendances
         run: pip install -r requirements.txt
-        working-directory: python-app
+        working-directory: python-app      # on se place dans python-app/
       - name: Lancer les tests
         run: pytest -v
         working-directory: python-app
 
+  # ============================================================
+  # JOB 2 : node
+  # ============================================================
   node:
     runs-on: ubuntu-latest
     steps:
@@ -29,12 +42,15 @@ jobs:
         with:
           node-version: 20
       - name: Installer les dépendances
-        run: npm ci                  # installe exactement package-lock.json
+        run: npm ci                        # installe exactement les versions de package-lock.json
         working-directory: node-app
       - name: Lancer les tests
-        run: npm test                # lance jest
+        run: npm test                      # lance Jest
         working-directory: node-app
 
+  # ============================================================
+  # JOB 3 : java
+  # ============================================================
   java:
     runs-on: ubuntu-latest
     steps:
@@ -43,12 +59,15 @@ jobs:
         run: bash db/setup.sh
       - uses: actions/setup-java@v4
         with:
-          distribution: temurin      # distribution Java open source
+          distribution: temurin            # distribution Java open source
           java-version: 17
       - name: Compiler et tester
-        run: mvn -B package          # Maven compile puis lance JUnit
+        run: mvn -B package                # compile + lance les tests JUnit
         working-directory: java-app
 
+  # ============================================================
+  # JOB 4 : php
+  # ============================================================
   php:
     runs-on: ubuntu-latest
     steps:
@@ -58,10 +77,35 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: "8.3"
-          extensions: pdo, pdo_pgsql  # driver PostgreSQL pour PHP
+          extensions: pdo, pdo_pgsql       # driver PostgreSQL pour PHP
       - name: Installer les dépendances
         run: composer install --no-interaction
         working-directory: php-app
       - name: Lancer les tests
         run: vendor/bin/phpunit tests
         working-directory: php-app
+
+  # ============================================================
+  # JOB 5 : build, ne démarre que si les 4 tests sont verts
+  # ============================================================
+  build:
+    runs-on: ubuntu-latest
+    needs: [python, node, java, php]     # dépendance : attend les 4 jobs
+    steps:
+      - name: Build
+        run: echo "Build OK : tous les tests sont passés"
+
+  # ============================================================
+  # JOB 6 : deploy, après build, uniquement sur main
+  # ============================================================
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build                         # attend build
+    if: github.ref == 'refs/heads/main'  # uniquement si la branche est main
+    steps:
+      - name: Déploiement
+        run: echo "Déploiement en cours"
+      - name: Vérifier la présence du secret (sans l'afficher)
+        env:
+          TOKEN: ${{ secrets.DEPLOY_TOKEN }}   # injecté depuis le coffre GitHub
+        run: test -n "$TOKEN" && echo "Token présent"
